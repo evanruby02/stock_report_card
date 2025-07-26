@@ -1,0 +1,110 @@
+import yfinance as yf
+import pandas as pd
+from datetime import datetime
+
+
+def get_yfinance_metrics(ticker_symbol: str) -> dict:
+    ticker = yf.Ticker(ticker_symbol)
+    sp500 = yf.Ticker("^GSPC")
+    now = datetime.today().strftime("%Y-%m-%d")
+
+    metrics = {
+        "Ticker": ticker_symbol.upper(),
+        "Date Collected": now
+    }
+
+    # 1. Cash Flow from Operations (robust)
+    try:
+        cfo_df = ticker.cashflow
+        metrics["Cash Flow from Operations"] = cfo_df.loc["Operating Cash Flow"].dropna(
+        ).iloc[0]
+    except Exception:
+        metrics["Cash Flow from Operations"] = None
+
+    # 2. Total Debt (try 'Total Debt' first, fallback to sum of short and long term debt)
+    try:
+        bs = ticker.balance_sheet
+        if "Total Debt" in bs.index:
+            total_debt = bs.loc["Total Debt"].dropna().iloc[0]
+        else:
+            short_term_debt = bs.loc.get(
+                "Short Long Term Debt", pd.Series([0])).dropna().iloc[0]
+            long_term_debt = bs.loc.get(
+                "Long Term Debt", pd.Series([0])).dropna().iloc[0]
+            total_debt = short_term_debt + long_term_debt
+        metrics["Total Debt"] = total_debt
+    except Exception:
+        metrics["Total Debt"] = None
+
+    # 3. Revenue Growth
+    try:
+        revenues = ticker.financials.loc["Total Revenue"]
+        metrics["Revenue Growth"] = revenues[0] / revenues[1]
+    except Exception:
+        metrics["Revenue Growth"] = None
+
+    # 4. Operating Margin
+    try:
+        metrics["Operating Margin"] = ticker.info.get("operatingMargins", None)
+    except Exception:
+        metrics["Operating Margin"] = None
+
+    # 5. Scalability Ratio
+    try:
+        op_income = ticker.financials.loc["Operating Income"]
+        total_revenue = ticker.financials.loc["Total Revenue"]
+        op_expenses = total_revenue - op_income
+        metrics["Scalability Ratio"] = (
+            total_revenue[0] / total_revenue[1]) / (op_expenses[0] / op_expenses[1])
+    except Exception:
+        metrics["Scalability Ratio"] = None
+
+    # 6. 5-Year Return vs S&P 500
+    try:
+        stock_hist = ticker.history(period="5y")
+        sp500_hist = sp500.history(period="5y")
+        stock_return = stock_hist["Close"][-1] / stock_hist["Close"][0]
+        sp500_return = sp500_hist["Close"][-1] / sp500_hist["Close"][0]
+        metrics["5-Year Return vs S&P 500"] = stock_return / sp500_return
+    except Exception:
+        metrics["5-Year Return vs S&P 500"] = None
+
+    # 7. Cash Flow-to-Debt Ratio
+    try:
+        cfo = metrics["Cash Flow from Operations"]
+        debt = metrics["Total Debt"]
+        if cfo is not None and debt is not None and debt != 0:
+            metrics["Cash Flow-to-Debt Ratio"] = cfo / debt
+        else:
+            metrics["Cash Flow-to-Debt Ratio"] = None
+    except Exception:
+        metrics["Cash Flow-to-Debt Ratio"] = None
+
+    return metrics
+
+
+def collect_metrics_for_tickers(ticker_list):
+    results = []
+    for ticker in ticker_list:
+        print(f"Collecting data for {ticker}...")
+        metrics = get_yfinance_metrics(ticker)
+        results.append(metrics)
+    return pd.DataFrame(results)
+
+
+if __name__ == "__main__":
+    user_input = input(
+        "Enter one or more stock tickers separated by space (e.g., AAPL MSFT GOOGL): ")
+    tickers = user_input.strip().split()
+
+    if not tickers:
+        print("No tickers provided. Exiting.")
+    else:
+        df = collect_metrics_for_tickers(tickers)
+        print(df)
+
+        save = input("Save results to CSV? (y/n): ").strip().lower()
+        if save == "y":
+            filename = f"yfinance_metrics_{datetime.today().strftime('%Y%m%d')}.csv"
+            df.to_csv(filename, index=False)
+            print(f"Saved to {filename}")
