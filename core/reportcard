@@ -1,0 +1,91 @@
+def grade_reportcard(metrics: dict) -> dict:
+    scores = {}
+
+    def to_decimal(value):
+        """Convert value to decimal fraction.
+        Handles strings like '12.34%', floats > 1 (assumed percent), or decimals <= 1."""
+        if value is None:
+            return 0.0
+        if isinstance(value, str):
+            value = value.strip().replace("%", "")
+            try:
+                value = float(value)
+            except ValueError:
+                return 0.0
+        # If the value is greater than 1, treat it as a percentage and convert to decimal fraction
+        return value / 100 if value > 1 else value
+
+    # Normalize inputs
+    cash_to_debt = metrics.get("Cash Flow to Debt Ratio") or 0.0
+    rev_growth = to_decimal(metrics.get("Revenue Growth"))
+    op_margin = to_decimal(metrics.get("Operating Margin"))
+    short_interest_ratio = to_decimal(metrics.get("Short Interest Ratio"))
+    inst_own = to_decimal(metrics.get("Institutional Investment %"))
+    scalability = metrics.get("Scalability") or 0.0
+    shareholder_return = metrics.get("Relative 5Y Return")
+
+    # Normalize Relative 5Y Return:
+    # If > 1, assume it's a percent (e.g. 1473 means 1473%), so convert to decimal fraction
+    if shareholder_return is None:
+        shareholder_return = 0.0
+    elif isinstance(shareholder_return, str):
+        try:
+            shareholder_return = float(
+                shareholder_return.strip().replace("%", ""))
+        except ValueError:
+            shareholder_return = 0.0
+    if shareholder_return > 1:
+        shareholder_return = shareholder_return / 100
+
+    # 1. Cash to Debt
+    if cash_to_debt < 1:
+        scores["Cash to Debt"] = 0
+    elif 1 <= cash_to_debt < 2:
+        scores["Cash to Debt"] = 5
+    else:
+        scores["Cash to Debt"] = 10
+
+    # 2. Revenue Growth %
+    if rev_growth < 0.0010:
+        scores["Revenue Growth"] = 0
+    elif 0.0010 <= rev_growth < 0.0020:
+        scores["Revenue Growth"] = 5
+    else:
+        scores["Revenue Growth"] = 10
+
+    # 3. Operating Margin
+    if op_margin < 0.10:
+        scores["Operating Margin"] = 0
+    elif 0.10 <= op_margin < 0.25:
+        scores["Operating Margin"] = 5
+    else:
+        scores["Operating Margin"] = 10
+
+    # 4. Short Interest Ratio
+    if short_interest_ratio >= 0.10:
+        scores["Short Interest Ratio"] = 0
+    elif 0.05 <= short_interest_ratio < 0.10:
+        scores["Short Interest Ratio"] = 5
+    else:
+        scores["Short Interest Ratio"] = 10
+
+    # 5. Institutional Ownership %
+    if inst_own < 0.30:
+        scores["Institutional Ownership"] = 0
+    elif 0.30 <= inst_own < 0.60:
+        scores["Institutional Ownership"] = 5
+    else:
+        scores["Institutional Ownership"] = 10
+
+    # 6. Scalability
+    scores["Scalability"] = 10 if scalability > 1 else 0
+
+    # 7. Shareholder Treatment (relative 5yr return vs S&P 500)
+    if shareholder_return < 0:
+        scores["Shareholder Treatment"] = 0
+    elif 0 <= shareholder_return < 0.10:
+        scores["Shareholder Treatment"] = 5
+    else:
+        scores["Shareholder Treatment"] = 10
+
+    return scores
