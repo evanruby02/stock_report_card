@@ -1,0 +1,14 @@
+import os
+import pandas as pd
+
+
+def save_entry_to_database(df_entry, db_path="database.csv"):
+    """Append a single-row DataFrame to CSV database."""
+    if os.path.exists(db_path):
+        df_db = pd.read_csv(db_path)
+        # Append new row
+        df_db = pd.concat([df_db, df_entry], ignore_index=True)
+    else:
+        df_db = df_entry.copy()
+    # Save back to CSV
+    df_db.to_csv(db_path, index=False)
