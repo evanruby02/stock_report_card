@@ -1,0 +1,53 @@
+def get_institutional_ownership(ticker: str) -> float:
+    url = f"https://www.nasdaq.com/market-activity/stocks/{ticker}/institutional-holdings"
+    while True:
+        try:
+            user_input = input(
+                f"\nEnter institutional ownership percentage for {ticker} (2 decimal places).\n"
+                f"You can find this at: {url}\n"
+                f"Example: 72.3 means 72.3% institutionally owned.\n"
+                f"Your input: "
+            )
+            value = float(user_input.replace(",", ""))
+            return round(value, 2)
+        except ValueError:
+            print("Invalid input. Please enter a number with two decimal places.")
+
+
+def get_short_interest(ticker: str) -> float:
+    url = f"https://www.nasdaq.com/market-activity/stocks/{ticker.lower()}/short-interest"
+    while True:
+        try:
+            user_input = input(
+                f"\nEnter short interest for {ticker}.\n"
+                f"You can find this at: {url}\n"
+                f"Use the most recent data.\n"
+                f"Your input: "
+            )
+            value = float(user_input.replace(",", ""))
+            if value >= 0:
+                return round(value, 2)
+            else:
+                print("Please enter a non-negative number.")
+        except ValueError:
+            print("Invalid input. Please enter a numeric value.")
+
+
+def get_public_float(ticker: str) -> float:
+    url = f"https://www.marketwatch.com/investing/stock/{ticker.lower()}"
+    while True:
+        try:
+            user_input = input(
+                f"\nEnter public float for {ticker} (in millions).\n"
+                f"You can find this at: {url}\n"
+                f"Example: 780.5 means 780.5 million shares.\n"
+                f"Your input: "
+            )
+            value = float(user_input)
+            if value >= 0:
+                # convert millions to shares
+                return round(value * 1_000_000, 2)
+            else:
+                print("Please enter a non-negative number.")
+        except ValueError:
+            print("Invalid input. Please enter a numeric value.")
