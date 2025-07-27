@@ -1,0 +1,22 @@
+from core.data import gather_data
+from core.reportcard import grade_reportcard
+
+
+def main():
+    stock = input("Please input a stock ticker (e.g., NVDA): ").strip()
+    df = gather_data(stock)
+    print("Metrics DataFrame:")
+    print(df)
+
+    # Assuming gather_data returns a dataframe with 1 row
+    metrics = df.iloc[0].to_dict()
+    scores = grade_reportcard(metrics)
+
+    print("\nQuantitative Scorecard:")
+    for category, score in scores.items():
+        print(f"{category}: {score}")
+    print(f"Total Score: {sum(scores.values())}/70")
+
+
+if __name__ == "__main__":
+    main()
