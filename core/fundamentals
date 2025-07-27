@@ -1,0 +1,52 @@
+import yfinance as yf
+
+
+def get_operating_margin(ticker):
+    try:
+        income = ticker.financials
+        op_income = income.loc["Operating Income"].iloc[0]
+        revenue = income.loc["Total Revenue"].iloc[0]
+        return op_income / revenue
+    except Exception:
+        return None
+
+
+def get_revenue_growth(ticker):
+    try:
+        income = ticker.financials
+        revenues = income.loc["Total Revenue"]
+        return (revenues.iloc[0] - revenues.iloc[1]) / revenues.iloc[1]
+    except Exception:
+        return None
+
+
+def get_scalability(ticker):
+    try:
+        income = ticker.financials
+        rev_growth = income.loc["Total Revenue"].iloc[0] / \
+            income.loc["Total Revenue"].iloc[1]
+        opex_growth = income.loc["Operating Expense"].iloc[0] / \
+            income.loc["Operating Expense"].iloc[1]
+        return rev_growth / opex_growth
+    except Exception:
+        return None
+
+
+def get_cash_flow_to_debt_ratio(ticker):
+    try:
+        cash_flow = ticker.cashflow.loc["Operating Cash Flow"].iloc[0]
+        total_debt = ticker.balance_sheet.loc["Total Debt"].iloc[0]
+        return cash_flow / total_debt
+    except Exception:
+        return None
+
+
+def get_5yr_return(ticker_symbol):
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        hist = ticker.history(period="5y")
+        start_price = hist["Close"].iloc[0]
+        end_price = hist["Close"].iloc[-1]
+        return (end_price / start_price) - 1
+    except Exception:
+        return None
