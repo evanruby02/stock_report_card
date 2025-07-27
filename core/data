@@ -1,15 +1,59 @@
+import os
+import yfinance as yf
 import pandas as pd
 from datetime import datetime
-import yfinance as yf
+from core.user_inputs import get_institutional_ownership, get_short_interest, get_public_float
 
-from core.fundamentals import (
-    get_operating_margin, get_revenue_growth, get_scalability,
-    get_cash_flow_to_debt_ratio, get_5yr_return,
-)
 
-from core.user_inputs import (
-    get_institutional_ownership, get_short_interest, get_public_float,
-)
+def get_operating_margin(ticker):
+    try:
+        income = ticker.financials
+        op_income = income.loc["Operating Income"].iloc[0]
+        revenue = income.loc["Total Revenue"].iloc[0]
+        return op_income / revenue
+    except Exception:
+        return None
+
+
+def get_revenue_growth(ticker):
+    try:
+        income = ticker.financials
+        revenues = income.loc["Total Revenue"]
+        return (revenues.iloc[0] - revenues.iloc[1]) / revenues.iloc[1]
+    except Exception:
+        return None
+
+
+def get_scalability(ticker):
+    try:
+        income = ticker.financials
+        rev_growth = income.loc["Total Revenue"].iloc[0] / \
+            income.loc["Total Revenue"].iloc[1]
+        opex_growth = income.loc["Operating Expense"].iloc[0] / \
+            income.loc["Operating Expense"].iloc[1]
+        return rev_growth / opex_growth
+    except Exception:
+        return None
+
+
+def get_cash_flow_to_debt_ratio(ticker):
+    try:
+        cash_flow = ticker.cashflow.loc["Operating Cash Flow"].iloc[0]
+        total_debt = ticker.balance_sheet.loc["Total Debt"].iloc[0]
+        return cash_flow / total_debt
+    except Exception:
+        return None
+
+
+def get_5yr_return(ticker_symbol):
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        hist = ticker.history(period="5y")
+        start_price = hist["Close"].iloc[0]
+        end_price = hist["Close"].iloc[-1]
+        return (end_price / start_price) - 1
+    except Exception:
+        return None
 
 
 def get_short_interest_ratio(ticker_symbol):
@@ -29,26 +73,85 @@ def gather_data(ticker_symbol):
     cf_to_debt = get_cash_flow_to_debt_ratio(ticker)
     stock_5yr_return = get_5yr_return(ticker_symbol)
     sp500_5yr_return = get_5yr_return("^GSPC")
-    relative_5yr_return = (
-        stock_5yr_return - sp500_5yr_return) if (stock_5yr_return and sp500_5yr_return) else None
+    relative_5yr_return = None
+    if stock_5yr_return is not None and sp500_5yr_return is not None:
+        relative_5yr_return = stock_5yr_return - sp500_5yr_return
 
     institutional_investment = get_institutional_ownership(ticker_symbol)
     short_interest_ratio = get_short_interest_ratio(ticker_symbol)
 
+    # Formatting helpers (raw decimals for grading)
     data = {
         "Date": datetime.today().strftime("%Y-%m-%d"),
         "Ticker": ticker_symbol.upper(),
-        "Operating Margin": op_margin,               # raw float (e.g., 0.35)
-        "Revenue Growth": revenue_growth,             # raw float (e.g., 0.12)
-        "Scalability": scalability,                   # float or ratio
-        "Cash Flow to Debt Ratio": cf_to_debt,        # float
-        # raw float (e.g., 3.10 for 310%)
+        "Operating Margin": op_margin,
+        "Revenue Growth": revenue_growth,
+        "Scalability": scalability,
+        "Cash Flow to Debt Ratio": cf_to_debt,
         "5Y Stock Return": stock_5yr_return,
-        "5Y S&P 500 Return": sp500_5yr_return,        # raw float
-        "Relative 5Y Return": relative_5yr_return,    # raw float (difference)
-        # convert from percent to decimal
-        "Institutional Investment %": institutional_investment / 100,
-        "Short Interest Ratio": short_interest_ratio,  # decimal
+        "5Y S&P 500 Return": sp500_5yr_return,
+        "Relative 5Y Return": relative_5yr_return,
+        "Institutional Investment %": institutional_investment,
+        "Short Interest Ratio": short_interest_ratio,
     }
 
     return pd.DataFrame([data])
+
+
+def format_metrics_for_display(df):
+    df_display = df.copy()
+
+    # Convert all columns to string dtype to avoid dtype conflicts
+    df_display = df_display.astype(str)
+
+    # Institutional Investment % formatted with 2 decimals + '%'
+    if "Institutional Investment %" in df_display.columns:
+        try:
+            val = float(df.at[0, "Institutional Investment %"])
+            df_display.at[0, "Institutional Investment %"] = f"{val:.2f}%"
+        except Exception:
+            pass
+
+    # Short Interest Ratio formatted as percentage string
+    if "Short Interest Ratio" in df_display.columns:
+        try:
+            val = float(df.at[0, "Short Interest Ratio"])
+            df_display.at[0, "Short Interest Ratio"] = f"{val * 100:.2f}%"
+        except Exception:
+            pass
+
+    # Percentage columns formatting
+    pct_cols = ["Operating Margin", "Revenue Growth",
+                "5Y Stock Return", "5Y S&P 500 Return", "Relative 5Y Return"]
+    for col in pct_cols:
+        if col in df_display.columns:
+            try:
+                val = float(df.at[0, col])
+                df_display.at[0, col] = f"{val * 100:.2f}%"
+            except Exception:
+                pass
+
+    # Numeric columns with 2 decimals
+    numeric_cols = ["Cash Flow to Debt Ratio", "Scalability"]
+    for col in numeric_cols:
+        if col in df_display.columns:
+            try:
+                val = float(df.at[0, col])
+                df_display.at[0, col] = f"{val:.2f}"
+            except Exception:
+                pass
+
+    return df_display
+
+
+def save_entry_to_database(df_entry: pd.DataFrame, db_path: str = "database.csv"):
+    """
+    Append a single-row DataFrame to a CSV database.
+    If the file doesn't exist, it will be created.
+    """
+    if os.path.exists(db_path):
+        df_db = pd.read_csv(db_path)
+        df_db = pd.concat([df_db, df_entry], ignore_index=True)
+    else:
+        df_db = df_entry.copy()
+    df_db.to_csv(db_path, index=False)
