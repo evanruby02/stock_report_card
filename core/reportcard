@@ -1,9 +1,10 @@
-def grade_reportcard(metrics: dict) -> dict:
+import pandas as pd
+
+
+def grade_reportcard(metrics: dict) -> tuple[dict, int]:
     scores = {}
 
     def to_decimal(value):
-        """Convert value to decimal fraction.
-        Handles strings like '12.34%', floats > 1 (assumed percent), or decimals <= 1."""
         if value is None:
             return 0.0
         if isinstance(value, str):
@@ -12,10 +13,8 @@ def grade_reportcard(metrics: dict) -> dict:
                 value = float(value)
             except ValueError:
                 return 0.0
-        # If the value is greater than 1, treat it as a percentage and convert to decimal fraction
         return value / 100 if value > 1 else value
 
-    # Normalize inputs
     cash_to_debt = metrics.get("Cash Flow to Debt Ratio") or 0.0
     rev_growth = to_decimal(metrics.get("Revenue Growth"))
     op_margin = to_decimal(metrics.get("Operating Margin"))
@@ -24,8 +23,6 @@ def grade_reportcard(metrics: dict) -> dict:
     scalability = metrics.get("Scalability") or 0.0
     shareholder_return = metrics.get("Relative 5Y Return")
 
-    # Normalize Relative 5Y Return:
-    # If > 1, assume it's a percent (e.g. 1473 means 1473%), so convert to decimal fraction
     if shareholder_return is None:
         shareholder_return = 0.0
     elif isinstance(shareholder_return, str):
@@ -80,7 +77,7 @@ def grade_reportcard(metrics: dict) -> dict:
     # 6. Scalability
     scores["Scalability"] = 10 if scalability > 1 else 0
 
-    # 7. Shareholder Treatment (relative 5yr return vs S&P 500)
+    # 7. Shareholder Treatment (relative 5yr return)
     if shareholder_return < 0:
         scores["Shareholder Treatment"] = 0
     elif 0 <= shareholder_return < 0.10:
@@ -88,4 +85,39 @@ def grade_reportcard(metrics: dict) -> dict:
     else:
         scores["Shareholder Treatment"] = 10
 
-    return scores
+    total_score = sum(scores.values())
+    return scores, total_score
+
+
+def append_scores_to_df(df: pd.DataFrame, scores: dict) -> pd.DataFrame:
+    # Create a dict for the new row with blanks for non-score columns
+    score_row = {
+        "Date": "",
+        "Ticker": "",
+        "5Y Stock Return": "",
+        "5Y S&P 500 Return": "",
+    }
+
+    # Map score keys to DataFrame column names
+    col_map = {
+        "Cash to Debt": "Cash Flow to Debt Ratio",
+        "Revenue Growth": "Revenue Growth",
+        "Operating Margin": "Operating Margin",
+        "Short Interest Ratio": "Short Interest Ratio",
+        "Institutional Ownership": "Institutional Investment %",
+        "Scalability": "Scalability",
+        "Shareholder Treatment": "Relative 5Y Return",
+    }
+
+    # Fill the score values in the corresponding columns
+    for key, col_name in col_map.items():
+        score_row[col_name] = scores.get(key, "")
+
+    # Fill blanks for any other columns
+    for col in df.columns:
+        if col not in score_row:
+            score_row[col] = ""
+
+    # Append score row to DataFrame
+    score_df = pd.DataFrame([score_row])
+    return pd.concat([df, score_df], ignore_index=True)
