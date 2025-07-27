@@ -1,0 +1,54 @@
+import pandas as pd
+from datetime import datetime
+import yfinance as yf
+
+from core.fundamentals import (
+    get_operating_margin, get_revenue_growth, get_scalability,
+    get_cash_flow_to_debt_ratio, get_5yr_return,
+)
+
+from core.user_inputs import (
+    get_institutional_ownership, get_short_interest, get_public_float,
+)
+
+
+def get_short_interest_ratio(ticker_symbol):
+    short_interest = get_short_interest(ticker_symbol)
+    float_shares = get_public_float(ticker_symbol)
+    if short_interest is not None and float_shares not in (None, 0):
+        return short_interest / float_shares
+    return None
+
+
+def gather_data(ticker_symbol):
+    ticker = yf.Ticker(ticker_symbol)
+
+    op_margin = get_operating_margin(ticker)
+    revenue_growth = get_revenue_growth(ticker)
+    scalability = get_scalability(ticker)
+    cf_to_debt = get_cash_flow_to_debt_ratio(ticker)
+    stock_5yr_return = get_5yr_return(ticker_symbol)
+    sp500_5yr_return = get_5yr_return("^GSPC")
+    relative_5yr_return = (
+        stock_5yr_return - sp500_5yr_return) if (stock_5yr_return and sp500_5yr_return) else None
+
+    institutional_investment = get_institutional_ownership(ticker_symbol)
+    short_interest_ratio = get_short_interest_ratio(ticker_symbol)
+
+    data = {
+        "Date": datetime.today().strftime("%Y-%m-%d"),
+        "Ticker": ticker_symbol.upper(),
+        "Operating Margin": op_margin,               # raw float (e.g., 0.35)
+        "Revenue Growth": revenue_growth,             # raw float (e.g., 0.12)
+        "Scalability": scalability,                   # float or ratio
+        "Cash Flow to Debt Ratio": cf_to_debt,        # float
+        # raw float (e.g., 3.10 for 310%)
+        "5Y Stock Return": stock_5yr_return,
+        "5Y S&P 500 Return": sp500_5yr_return,        # raw float
+        "Relative 5Y Return": relative_5yr_return,    # raw float (difference)
+        # convert from percent to decimal
+        "Institutional Investment %": institutional_investment / 100,
+        "Short Interest Ratio": short_interest_ratio,  # decimal
+    }
+
+    return pd.DataFrame([data])
